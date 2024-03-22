@@ -1,0 +1,222 @@
+---
+title: "gabrg2_cko_syn_bot"
+output: html_document
+date: "2024-01-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(ggpubr)
+library(ggbeeswarm)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(dplyr)
+library(viridis)
+
+#windowsFonts(Arial = windowsFont("Arial"))
+
+# Defines a colorblind-friendly palette
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# Imports dataset called "combined" that has the columns "replicate," "variable," and "value"
+p42_counts <- read_excel("p42_layers/Summary.xlsx")
+decoder <- read.csv("p42_layers/Decoder.csv")
+
+```
+
+
+```{r}
+# Orders the variables on x-axis
+p42_counts$animal <- c(1:length(p42_counts$Image))
+
+for (i in 1:length(p42_counts$Image)){
+    p42_counts$animal[i] <- str_sub(p42_counts$Image[i], 8, 13)
+}
+
+p42_counts_decoded <- merge(p42_counts, decoder, by = "animal")
+
+counts <- data.frame(animal = p42_counts_decoded$animal,
+                     genotype = p42_counts_decoded$genotype,
+                     sex = p42_counts_decoded$sex,
+                     layer = sub(".tif", "", substring(p42_counts_decoded$Image, regexpr(".tif", p42_counts_decoded$Image) - 1)),
+                     synapse_count = p42_counts_decoded$`Colocalized Puncta Count`)
+counts$animal <- factor(counts$animal)
+counts$genotype <- factor(counts$genotype)
+counts <- counts[counts$layer %in% c(1:7),]
+```
+
+
+```{r}
+library(FSA)
+
+  Summarize(synapse_count ~ layer + genotype,
+          data=counts,
+          digits=3)
+```
+```{r}
+library(car)
+model = lm(synapse_count ~ layer + genotype + layer:genotype,
+           data = counts)
+summary(model)
+
+Anova(model, type = "II")
+
+```
+
+
+```{r}
+# Calculates averages of each replicate
+ReplicateAverages <- counts %>% group_by(genotype, animal, layer) %>%
+  summarise(synapse_count = mean(synapse_count))
+ReplicateAverages
+
+# Gives the p-value for the t-Test of variable 1 and 2
+ttest1 <- t.test(synapse_count  ~ genotype, data = counts[counts$layer == 1,], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest1p <- ttest1[["p.value"]]
+ttest1
+ttest1p
+
+ttest2 <- t.test(synapse_count  ~ genotype, data = counts[counts$layer == 2,], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest2p <- ttest2[["p.value"]]
+ttest2
+ttest2p
+
+ttest3 <- t.test(synapse_count  ~ genotype, data = counts[counts$layer == 3,], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest3p <- ttest3[["p.value"]]
+ttest3
+ttest3p
+
+ttest4 <- t.test(synapse_count  ~ genotype, data = counts[counts$layer == 4,], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest4p <- ttest4[["p.value"]]
+ttest4
+ttest4p
+
+ttest5 <- t.test(synapse_count  ~ genotype, data = counts[counts$layer == 5,], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest5p <- ttest5[["p.value"]]
+ttest5
+ttest5p
+
+ttest6 <- t.test(synapse_count  ~ genotype, data = counts[counts$layer == 6,], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest6p <- ttest6[["p.value"]]
+ttest6
+ttest6p
+
+ttest7 <- t.test(synapse_count  ~ genotype, data = counts[counts$layer == 7,], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest7p <- ttest7[["p.value"]]
+ttest7
+ttest7p
+
+# Calculates total averages
+TotalAverages <- ReplicateAverages %>% group_by(genotype, layer) %>%  summarise(synapse_count = mean(synapse_count))
+TotalAverages
+
+```
+
+```{r}
+# Plots Superplot based on biological replicate averages
+counts$genotype <- factor(counts$genotype, levels = c("ctrl", "cko"))
+superplot_p42 <- ggplot(counts, aes(x=genotype,y=synapse_count,color=factor(animal))) +
+
+  # Adds individual data points
+  geom_quasirandom(size=2, alpha = 1/2) +
+  
+  # Adds mean values as bars
+  stat_summary(data = TotalAverages, fun = mean, fun.min = mean, fun.max = mean,
+               geom = "bar", width = 0.8, color = "gray", alpha = 0.5) +
+  facet_wrap( ~ layer)  +               
+  # Adds error bars
+  stat_summary(data = ReplicateAverages, fun.data = mean_se,
+               geom = "errorbar", width = 0.1, color = "black") +
+  facet_wrap( ~ layer)  +          
+  # Adds color palette
+  #scale_colour_manual(7) +
+  
+  # Adds Replicative averages as points (argument "cex" can be used to spread the data points if the averages are close together)
+  geom_point(data=ReplicateAverages, size=5) +
+  
+  #Cosmetics and labeling
+  theme(
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8), 
+  ) +
+    ggtitle ("VGAT/GEPH colocs ") + xlab("") + ylab("Coloc counts") 
+ppi = 300
+png(filename = "Gabrg2_cko_v_ctrl_superplot_p42.png", width = 8*ppi, height = 8*ppi, res = ppi)
+  superplot_p42
+  dev.off()
+superplot_p42
+```
+```{r}
+# Plots Superplot for L2/3 based on biological replicate averages
+counts$genotype <- factor(counts$genotype, levels = c("ctrl", "cko"))
+superplot_p42_L23 <- ggplot(counts[counts$layer == 2,], aes(x=genotype,y=synapse_count,color=factor(animal))) +
+
+  # Adds individual data points
+  geom_quasirandom(size=2, alpha = 1/2) +
+  
+  # Adds mean values as bars
+  stat_summary(data = TotalAverages[TotalAverages$layer == 2,], fun = mean, fun.min = mean, fun.max = mean,
+               geom = "bar", width = 0.8, color = "gray", alpha = 0.5)  +      
+  # Adds error bars
+  stat_summary(data = ReplicateAverages[ReplicateAverages$layer == 2,], fun.data = mean_se,
+               geom = "errorbar", width = 0.1, color = "black") +
+  # Adds color palette
+  #scale_colour_manual(7) +
+  
+  # Adds Replicative averages as points (argument "cex" can be used to spread the data points if the averages are close together)
+  geom_point(data=ReplicateAverages[ReplicateAverages$layer == 2,], size=5) +
+  
+  #Cosmetics and labeling
+  theme(
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8), 
+  ) +
+    ggtitle ("VGAT/GEPH colocs ") + xlab("") + ylab("Coloc counts") 
+ppi = 300
+png(filename = "Gabrg2_cko_v_ctrl_superplot_p42_L23.png", width = 4*ppi, height = 3*ppi, res = ppi)
+  superplot_p42_L23
+  dev.off()
+superplot_p42_L23
+print(ttest2p)
+```
+```{r}
+# Plots Superplot for L2/3 based on biological replicate averages
+counts$genotype <- factor(counts$genotype, levels = c("ctrl", "cko"))
+superplot_p42_L4 <- ggplot(counts[counts$layer == 4,], aes(x=genotype,y=synapse_count,color=factor(animal))) +
+
+  # Adds individual data points
+  geom_quasirandom(size=2, alpha = 1/2) +
+  
+  # Adds mean values as bars
+  stat_summary(data = TotalAverages[TotalAverages$layer == 4,], fun = mean, fun.min = mean, fun.max = mean,
+               geom = "bar", width = 0.8, color = "gray", alpha = 0.5)  +      
+  # Adds error bars
+  stat_summary(data = ReplicateAverages[ReplicateAverages$layer == 4,], fun.data = mean_se,
+               geom = "errorbar", width = 0.1, color = "black") +
+  # Adds color palette
+  #scale_colour_manual(7) +
+  
+  # Adds Replicative averages as points (argument "cex" can be used to spread the data points if the averages are close together)
+  geom_point(data=ReplicateAverages[ReplicateAverages$layer == 4,], size=5) +
+  
+  #Cosmetics and labeling
+  theme(
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8), 
+  ) +
+    ggtitle ("VGAT/GEPH colocs ") + xlab("") + ylab("Coloc counts") 
+ppi = 300
+png(filename = "Gabrg2_cko_v_ctrl_superplot_p42_L4.png", width = 4*ppi, height = 3*ppi, res = ppi)
+  superplot_p42_L4
+  dev.off()
+superplot_p42_L4
+print(ttest4p)
+```
+
+```{r}
+sessionInfo()
+```
+
